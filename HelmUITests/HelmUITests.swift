@@ -8,29 +8,61 @@
 import XCTest
 
 final class HelmUITests: XCTestCase {
-
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testConfigureConnectSendAndDisconnectFlow() throws {
         let app = XCUIApplication()
+        app.launchEnvironment["HELM_USE_MOCK_CLIENT"] = "1"
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        XCTAssertTrue(app.buttons["root.configure"].waitForExistence(timeout: 2))
+        app.buttons["root.configure"].tap()
+
+        XCTAssertTrue(app.buttons["settings.save"].waitForExistence(timeout: 2))
+        app.buttons["settings.save"].tap()
+
+        XCTAssertTrue(app.buttons["connection.disconnect"].waitForExistence(timeout: 4))
+
+        let composer = app.descendants(matching: .any)["chat.composer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 2))
+        composer.tap()
+        composer.typeText("Ping the gateway")
+
+        app.buttons["chat.send"].tap()
+
+        let replyText = app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS %@", "Helm is connected to the mock gateway"))
+            .firstMatch
+        XCTAssertTrue(replyText.waitForExistence(timeout: 8))
+
+        app.buttons["connection.disconnect"].tap()
+        XCTAssertTrue(app.buttons["connection.primary"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Ping the gateway"].exists)
+    }
+
+    @MainActor
+    func testFailedSendShowsRetryInContext() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["HELM_USE_MOCK_CLIENT"] = "1"
+        app.launchEnvironment["HELM_MOCK_FAIL_SEND"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.buttons["root.configure"].waitForExistence(timeout: 2))
+        app.buttons["root.configure"].tap()
+        app.buttons["settings.save"].tap()
+
+        XCTAssertTrue(app.buttons["connection.disconnect"].waitForExistence(timeout: 4))
+
+        let composer = app.descendants(matching: .any)["chat.composer"]
+        XCTAssertTrue(composer.waitForExistence(timeout: 2))
+        composer.tap()
+        composer.typeText("This will fail")
+        app.buttons["chat.send"].tap()
+
+        XCTAssertTrue(app.buttons["message.retry"].waitForExistence(timeout: 5))
     }
 
     @MainActor
